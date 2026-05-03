@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { append, computeBalances, readAll } from "@lobstah/ledger";
 import {
+  assertSafeUrl,
   ChatCompletionRequestSchema,
   type Identity,
   isReceiptFresh,
@@ -17,6 +18,8 @@ import { noteNonce } from "./nonce-store.js";
 import { getCapacity, markFailed, markSucceeded } from "./peer-state.js";
 import { loadPeers, type Peer } from "./peers.js";
 import { candidatesForModel, orderCandidates } from "./pick.js";
+
+const blockPrivateNetwork = (): boolean => process.env.LOBSTAH_BLOCK_PRIVATE_ADDRS === "1";
 
 export type RouterOptions = {
   identity: Identity;
@@ -84,7 +87,18 @@ const openUpstreamWithFallback = async (
   ourPubkey: string,
 ): Promise<UpstreamAttempt> => {
   const errors: { peer: string; message: string }[] = [];
+  const policy = { blockPrivateNetwork: blockPrivateNetwork() };
   for (const peer of candidates) {
+    // Re-check URL safety per request (DNS-rebind defense).
+    const safe = await assertSafeUrl(peer.url, policy);
+    if (!safe.ok) {
+      markFailed(peer.pubkey);
+      errors.push({
+        peer: peer.pubkey.slice(0, 16),
+        message: `unsafe peer URL: ${safe.reason}`,
+      });
+      continue;
+    }
     const target = `${peer.url.replace(/\/$/, "")}/v1/chat/completions`;
     try {
       const r = await fetch(target, {

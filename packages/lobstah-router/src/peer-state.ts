@@ -1,3 +1,4 @@
+import { assertSafeUrl } from "@lobstah/protocol";
 import type { Peer } from "./peers.js";
 
 export type PeerCapacity = {
@@ -5,6 +6,8 @@ export type PeerCapacity = {
   models: string[];
   queueDepth: number;
 };
+
+const blockPrivateNetwork = (): boolean => process.env.LOBSTAH_BLOCK_PRIVATE_ADDRS === "1";
 
 type PeerEntry = {
   capacity?: PeerCapacity;
@@ -33,6 +36,15 @@ export const getCapacity = async (peer: Peer): Promise<PeerCapacity | null> => {
   const now = Date.now();
   if (e.capacity && e.capacityFetchedAt && now - e.capacityFetchedAt < CAPACITY_TTL_MS) {
     return e.capacity;
+  }
+  // Re-check URL safety on every uncached fetch; defense against DNS rebinding
+  // (a hostname that resolved to a public IP at peer-add time may now resolve
+  // to a loopback or cloud-metadata address).
+  const safe = await assertSafeUrl(peer.url, { blockPrivateNetwork: blockPrivateNetwork() });
+  if (!safe.ok) {
+    process.stderr.write(`router: skipping unsafe peer URL ${peer.url}: ${safe.reason}\n`);
+    markFailed(peer.pubkey);
+    return null;
   }
   try {
     const r = await fetch(`${peer.url.replace(/\/$/, "")}/capacity`, {

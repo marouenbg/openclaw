@@ -5,7 +5,8 @@ import { candidatesForModel, orderCandidates, resetCursor } from "./pick.js";
 
 const peer = (suffix: string, label?: string): Peer => ({
   pubkey: `lob1${suffix.padStart(64, "0")}`.slice(0, 68),
-  url: `http://example.invalid/${suffix}`,
+  // Use a literal IP from RFC5737 TEST-NET-1 so assertSafeUrl skips DNS lookup.
+  url: `http://192.0.2.1/${suffix}`,
   label,
 });
 

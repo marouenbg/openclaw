@@ -82,7 +82,9 @@ export const buildTrackerApp = (): TrackerApp => {
 
 export const startTracker = async (opts: TrackerOptions = {}): Promise<RunningTracker> => {
   const port = opts.port ?? DEFAULT_PORT;
-  const host = opts.host ?? "0.0.0.0";
+  // Loopback by default. Operators who want to host a public tracker must
+  // pass --host explicitly (e.g. `--host 0.0.0.0`).
+  const host = opts.host ?? "127.0.0.1";
   const { app, registry } = buildTrackerApp();
   const server = serve({ fetch: app.fetch, hostname: host, port });
   return {

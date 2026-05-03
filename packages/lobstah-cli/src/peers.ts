@@ -1,5 +1,7 @@
-import { type SignedAnnouncement, verifyAnnouncement } from "@lobstah/protocol";
+import { assertSafeUrl, type SignedAnnouncement, verifyAnnouncement } from "@lobstah/protocol";
 import { addPeer, loadPeers, removePeer } from "@lobstah/router";
+
+const blockPrivateNetwork = (): boolean => process.env.LOBSTAH_BLOCK_PRIVATE_ADDRS === "1";
 
 export const peers = async (args: string[]): Promise<void> => {
   const sub = args[0];
@@ -10,6 +12,14 @@ export const peers = async (args: string[]): Promise<void> => {
       const label = args[3];
       if (!pubkey || !url) {
         process.stderr.write("usage: lobstah peers add <pubkey> <url> [label]\n");
+        process.exit(2);
+      }
+      const safe = await assertSafeUrl(url, { blockPrivateNetwork: blockPrivateNetwork() });
+      if (!safe.ok) {
+        process.stderr.write(`refusing to add peer: ${safe.reason}\n`);
+        process.stderr.write(
+          "(set LOBSTAH_BLOCK_PRIVATE_ADDRS=0 or =1 to adjust the URL safety policy)\n",
+        );
         process.exit(2);
       }
       const list = await addPeer({ pubkey, url, label });
@@ -49,19 +59,30 @@ export const peers = async (args: string[]): Promise<void> => {
       const data = (await res.json()) as { peers?: SignedAnnouncement[] };
       const incoming = data.peers ?? [];
       let added = 0;
-      let rejected = 0;
+      let rejectedSig = 0;
+      let rejectedUrl = 0;
+      const policy = { blockPrivateNetwork: blockPrivateNetwork() };
       for (const signed of incoming) {
         if (!verifyAnnouncement(signed)) {
-          rejected += 1;
+          rejectedSig += 1;
           continue;
         }
         const a = signed.announcement;
+        const safe = await assertSafeUrl(a.url, policy);
+        if (!safe.ok) {
+          rejectedUrl += 1;
+          process.stderr.write(`  skipping ${a.pubkey.slice(0, 16)}: ${safe.reason}\n`);
+          continue;
+        }
         await addPeer({ pubkey: a.pubkey, url: a.url, label: a.label });
         added += 1;
       }
+      const tail: string[] = [];
+      if (rejectedSig) tail.push(`${rejectedSig} bad-signature`);
+      if (rejectedUrl) tail.push(`${rejectedUrl} unsafe-url`);
       process.stdout.write(
         `synced ${added} peer(s) from ${trackerUrl}` +
-          (rejected ? ` (rejected ${rejected} with bad signatures)` : "") +
+          (tail.length ? ` (rejected ${tail.join(", ")})` : "") +
           "\n",
       );
       return;

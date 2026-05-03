@@ -96,11 +96,29 @@ export const worker = async (args: string[]): Promise<void> => {
 
   const w = await startWorker({ identity, port, host: hostArg });
 
-  process.stdout.write(`lobstah-worker listening on :${w.port}\n`);
+  const effectiveHost = hostArg ?? "127.0.0.1";
+  const isPublicHost = effectiveHost === "0.0.0.0" || effectiveHost === "::";
+
+  process.stdout.write(`lobstah-worker listening on ${effectiveHost}:${w.port}\n`);
+  if (isPublicHost) {
+    process.stdout.write(
+      "  WARNING: bound to all interfaces — the worker exposes Ollama-backed\n" +
+        "           inference with no authentication. Make sure the network or\n" +
+        "           firewall is restricting who can reach this port.\n",
+    );
+  }
   process.stdout.write(`  identity: ${defaultIdentityPath()}\n`);
   process.stdout.write(`  pubkey:   ${pk}\n`);
   process.stdout.write(`  engine:   ${w.engine}\n`);
   process.stdout.write(`  ollama:   ${process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434"}\n`);
+
+  if (announceTo && !isPublicHost) {
+    process.stdout.write(
+      "  NOTE: --announce-to is set but the worker is bound to a loopback host.\n" +
+        "        Peers won't be able to reach it. Pass --host 0.0.0.0 (or a\n" +
+        "        specific interface IP) to actually serve incoming requests.\n",
+    );
+  }
 
   let heartbeatTimer: NodeJS.Timeout | undefined;
   if (announceTo && announceUrl) {

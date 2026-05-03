@@ -191,7 +191,11 @@ export const buildWorkerApp = (opts: BuildWorkerAppOptions): WorkerApp => {
 
 export const startWorker = async (opts: WorkerOptions): Promise<RunningWorker> => {
   const port = opts.port ?? DEFAULT_PORT;
-  const host = opts.host ?? "0.0.0.0";
+  // Loopback by default. The worker exposes Ollama-backed inference with no
+  // authentication on the API surface, so binding it to all interfaces would
+  // silently expose local compute to the LAN. Operators who want network
+  // exposure must pass --host explicitly (e.g. `--host 0.0.0.0`).
+  const host = opts.host ?? "127.0.0.1";
   const built = buildWorkerApp({ identity: opts.identity, engine: opts.engine });
   const server = serve({ fetch: built.app.fetch, hostname: host, port });
   return {

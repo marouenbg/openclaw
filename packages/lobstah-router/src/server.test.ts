@@ -17,7 +17,10 @@ import { resetCursor } from "./pick.js";
 import { buildRouterApp } from "./server.js";
 
 const enc = new TextEncoder();
-const PEER_URL = "http://fake-worker.invalid:17474";
+// Use a literal IP from RFC5737 TEST-NET-1 so assertSafeUrl skips DNS lookup
+// and treats it as a public address (the fetch mock intercepts before any
+// real network call would be made).
+const PEER_URL = "http://192.0.2.1:17474";
 
 const ollamaContentChunk = (delta: string): string =>
   `data: ${JSON.stringify({ choices: [{ delta: { content: delta } }] })}\n\n`;

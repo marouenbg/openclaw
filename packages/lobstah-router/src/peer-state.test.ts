@@ -10,7 +10,9 @@ import {
   resetPeerState,
 } from "./peer-state.js";
 
-const peer = (pubkey: string, url = "http://example.invalid:1") => ({ pubkey, url });
+// Use a literal IP from RFC5737 TEST-NET-1 so assertSafeUrl skips DNS lookup
+// (the fetch mock intercepts before any real network call would be made).
+const peer = (pubkey: string, url = "http://192.0.2.1:1") => ({ pubkey, url });
 
 const okFetch = (body: unknown) =>
   vi.fn().mockResolvedValue({
